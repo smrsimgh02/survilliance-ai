@@ -14,13 +14,13 @@ Samar, you are responsible for the heart of the system—the Central Hub.
     - Implement a consistent `X-API-KEY` check for all endpoints.
     - *Status: Completed.*
 
-- [ ] **Historical Detections API (CRITICAL)**:
-    - **Task**: Create an endpoint `/detections/search` to fetch past detections.
-    - **Filters**: Must support `camera_id`, `class_name`, and `date_range`.
-    - **Dependency**: Hemant's Dashboard search bar depends on this.
+- [x] **Historical Detections API (CRITICAL)**:
+    - **Task**: Created `/detections/search` endpoint.
+    - **Filters**: Supports `camera_id`, `class_name`, and `date_range`.
+    - **Status**: Ready for Hemant's Dashboard.
 
-- [ ] **Database Optimization**:
-    - Ensure SQLite handles concurrent writes from multiple AI nodes efficiently.
+- [x] **Database Optimization**:
+    - Enabled WAL Mode for concurrent writes.
 
 ---
 

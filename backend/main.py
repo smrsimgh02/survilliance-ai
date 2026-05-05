@@ -167,12 +167,27 @@ async def create_bulk_detections(detections: List[Detection]):
         
     return {"status": "success", "count": len(detections)}
 
-@app.get("/detections/", response_model=List[Detection])
-async def get_detections(limit: int = 100, camera_id: Optional[str] = None):
+@app.get("/detections/search", response_model=List[Detection])
+async def search_detections(
+    camera_id: Optional[str] = None,
+    class_name: Optional[str] = None,
+    start_date: Optional[datetime.date] = None,
+    end_date: Optional[datetime.date] = None,
+    limit: int = 100
+):
     with Session(engine) as session:
-        statement = select(Detection).order_by(Detection.timestamp.desc()).limit(limit)
+        statement = select(Detection).order_by(Detection.timestamp.desc())
+        
         if camera_id:
             statement = statement.where(Detection.camera_id == camera_id)
+        if class_name:
+            statement = statement.where(Detection.class_name == class_name)
+        if start_date:
+            statement = statement.where(Detection.timestamp >= datetime.datetime.combine(start_date, datetime.time.min))
+        if end_date:
+            statement = statement.where(Detection.timestamp <= datetime.datetime.combine(end_date, datetime.time.max))
+            
+        statement = statement.limit(limit)
         return session.exec(statement).all()
 
 # --- Camera Endpoints ---
