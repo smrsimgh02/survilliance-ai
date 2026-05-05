@@ -6,16 +6,16 @@ Samar, you are responsible for the heart of the system—the Central Hub.
 
 ## 🚀 Current Tasks
 
-- [ ] **Backend Modularization**: 
-    - Split `main.py` into `models.py`, `database.py`, `manager.py`, and `routes/`.
-    - Current `main.py` is too large and risky.
+- [x] **Backend Modularization**: 
+    - Split `main.py` into `models.py`, `database.py`, `manager.py`, and `security.py`.
+    - Current `main.py` is now clean and maintainable.
 
-- [ ] **Security Enforcement**:
+- [x] **Security Enforcement**:
     - Implement a consistent `X-API-KEY` check for all endpoints.
-    - Default Key: `surveillance_secret_key_2024` (should be in `.env`).
+    - Key is managed via `.env`.
 
-- [ ] **Environment Configuration**:
-    - Move all hardcoded values (DB URL, Port, API Key) to a `.env` file.
+- [x] **Environment Configuration**:
+    - All hardcoded values moved to `.env`.
 
 - [ ] **Historical Detections API**:
     - Create an endpoint to fetch past detections with filters (by date, class, or camera).

@@ -132,18 +132,17 @@ async def create_detection(detection: Detection):
             session.add(detection)
             session.commit()
             session.refresh(detection)
-            
             with latest_detections_lock:
                 latest_detections[detection.camera_id] = [detection.dict()]
-        
-        broadcast_data = detection.dict()
-        if "timestamp" in broadcast_data and broadcast_data["timestamp"]:
-            broadcast_data["timestamp"] = str(broadcast_data["timestamp"])
-        await manager.broadcast(broadcast_data)
-        return detection
     except Exception as e:
         logger.error(f"Error saving detection: {e}")
         return {"error": str(e)}
+    
+    broadcast_data = detection.dict()
+    if "timestamp" in broadcast_data and broadcast_data["timestamp"]:
+        broadcast_data["timestamp"] = str(broadcast_data["timestamp"])
+    await manager.broadcast(broadcast_data)
+    return detection
 
 @app.post("/detections/bulk/", status_code=201, dependencies=[Depends(verify_api_key)])
 async def create_bulk_detections(detections: List[Detection]):
@@ -160,7 +159,6 @@ async def create_bulk_detections(detections: List[Detection]):
             for d in detections:
                 session.add(d)
             session.commit()
-            
             if detections:
                 with latest_detections_lock:
                     latest_detections[detections[0].camera_id] = [d.dict() for d in detections]
@@ -175,9 +173,9 @@ async def get_detections(limit: int = 100, camera_id: Optional[str] = None):
         statement = select(Detection).order_by(Detection.timestamp.desc()).limit(limit)
         if camera_id:
             statement = statement.where(Detection.camera_id == camera_id)
-        results = session.exec(statement).all()
-        return results
+        return session.exec(statement).all()
 
+# --- Camera Endpoints ---
 @app.get("/cameras/", response_model=List[Camera])
 async def get_cameras():
     with Session(engine) as session:
@@ -189,7 +187,6 @@ async def add_camera(camera: Camera):
         session.add(camera)
         session.commit()
         session.refresh(camera)
-        logger.info(f"New camera registered: {camera.id}")
         return camera
 
 @app.delete("/cameras/{camera_id}", dependencies=[Depends(verify_api_key)])
@@ -200,10 +197,9 @@ async def delete_camera(camera_id: str):
             return {"error": "Camera not found"}
         session.delete(camera)
         session.commit()
-        logger.info(f"Camera deleted: {camera_id}")
         return {"status": "deleted"}
 
-import threading
+# --- Video Streaming Logic ---
 local_webcam = None
 latest_frame = None
 latest_jpeg = None 
@@ -211,9 +207,7 @@ webcam_lock = Lock()
 
 def camera_thread_func():
     global local_webcam, latest_frame, latest_jpeg
-    logger.info("High-Performance Broadcast Thread started.")
     local_webcam = cv2.VideoCapture(0)
-    
     while True:
         try:
             success, frame = local_webcam.read()
@@ -225,19 +219,12 @@ def camera_thread_func():
                         latest_frame = frame
                         latest_jpeg = jpeg_bytes
             else:
-                logger.warning("Camera Busy/Lost. Attempting recovery...")
                 local_webcam.release()
                 time.sleep(2)
                 local_webcam = cv2.VideoCapture(0)
         except Exception as e:
             logger.error(f"Camera Thread Error: {e}")
         time.sleep(0.01)
-
-@app.on_event("startup")
-def startup_event():
-    t = threading.Thread(target=camera_thread_func, daemon=True)
-    t.start()
-    logger.info("Background camera capture active.")
 
 def gen_frames(camera_id: str):
     while True:
@@ -253,7 +240,6 @@ def gen_frames(camera_id: str):
         
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
         time.sleep(0.03)
 
 @app.get("/video_feed/{camera_id}")
