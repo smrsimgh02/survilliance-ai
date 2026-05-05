@@ -121,6 +121,10 @@ if os.path.exists(static_dir):
 async def root():
     return {"message": "Surveillance AI Hub API is running", "status": "ok"}
 
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "timestamp": str(datetime.datetime.utcnow())}
+
 @app.post("/detections/", status_code=201)
 async def create_detection(detection: Detection):
     with Session(engine) as session:
