@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  hub:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/database.db:/app/database.db
+    env_file:
+      - .env
+    restart: always
+
+  ai-node:
+    build:
+      context: ./ai_node
+      dockerfile: Dockerfile
+    depends_on:
+      - hub
+    environment:
+      - HUB_URL=http://hub:8000
+    env_file:
+      - .env
+    # Note: For GPU support, additional config would be needed here
+    restart: unless-stopped
