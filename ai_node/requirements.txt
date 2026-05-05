@@ -1,0 +1,12 @@
+torch
+torchvision
+torchaudio
+opencv-python
+requests
+pandas
+python-dotenv
+# yolov5 is loaded via torch.hub, but these are dependencies
+pyyaml
+tqdm
+matplotlib
+seaborn
