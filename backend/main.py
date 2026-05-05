@@ -3,6 +3,7 @@ import datetime
 import os
 import time
 import logging
+import threading
 from threading import Lock
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Security, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,6 +88,13 @@ async def create_detection(detection: Detection):
     with heartbeat_lock:
         node_heartbeats[detection.camera_id] = time.time()
 
+    # Convert string timestamp to datetime object for SQLite
+    if isinstance(detection.timestamp, str):
+        try:
+            detection.timestamp = datetime.datetime.fromisoformat(detection.timestamp.replace("Z", "+00:00"))
+        except:
+            detection.timestamp = datetime.datetime.utcnow()
+            
     try:
         with Session(engine) as session:
             session.add(detection)
@@ -111,8 +119,15 @@ async def create_bulk_detections(detections: List[Detection]):
 
     broadcast_payload = []
     for d in detections:
+        # Convert string timestamp to datetime object for SQLite
+        if isinstance(d.timestamp, str):
+            try:
+                d.timestamp = datetime.datetime.fromisoformat(d.timestamp.replace("Z", "+00:00"))
+            except:
+                d.timestamp = datetime.datetime.utcnow()
+        
         data = d.dict()
-        data["timestamp"] = str(data.get("timestamp") or datetime.datetime.utcnow())
+        data["timestamp"] = str(d.timestamp)
         broadcast_payload.append(data)
     
     await manager.broadcast(broadcast_payload)
@@ -168,31 +183,63 @@ async def search_detections(
         statement = statement.limit(limit)
         return session.exec(statement).all()
 
+# --- Camera Manager (Resource Sharing) ---
+class CameraManager:
+    def __init__(self):
+        self.cap = None
+        self.frame = None
+        self.lock = Lock()
+        self.active = False
+        self.thread = None
+
+    def start(self):
+        with self.lock:
+            if not self.active:
+                self.active = True
+                self.thread = threading.Thread(target=self._update, daemon=True)
+                self.thread.start()
+                logger.info("Camera Manager: Hardware stream started.")
+
+    def _update(self):
+        self.cap = cv2.VideoCapture(0)
+        while self.active:
+            success, frame = self.cap.read()
+            if success:
+                with self.lock:
+                    self.frame = frame.copy()
+            else:
+                time.sleep(0.1)
+        self.cap.release()
+
+    def get_frame(self):
+        with self.lock:
+            return self.frame
+
+camera_manager = CameraManager()
+
+@app.on_event("startup")
+def on_startup():
+    logger.info("🚀 Surveillance Hub Booting Up...")
+    create_db_and_tables()
+    camera_manager.start()
+
 @app.get("/video_feed/{camera_id}")
 async def video_feed(camera_id: str):
-    """Simple MJPEG streaming endpoint for local camera '0'."""
+    """Shared MJPEG streaming endpoint."""
     def generate():
-        # Open webcam 0
-        cap = cv2.VideoCapture(0)
-        try:
-            while True:
-                success, frame = cap.read()
-                if not success:
-                    break
+        while True:
+            frame = camera_manager.get_frame()
+            if frame is None:
+                time.sleep(0.1)
+                continue
+            
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
                 
-                # Encode as JPG
-                ret, buffer = cv2.imencode('.jpg', frame)
-                if not ret:
-                    continue
-                    
-                frame_bytes = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                
-                # Small sleep to control frame rate
-                time.sleep(0.03)
-        finally:
-            cap.release()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.04) # ~25 FPS
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
@@ -227,3 +274,8 @@ async def delete_camera(camera_id: str):
         session.delete(camera)
         session.commit()
         return {"status": "success"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -33,8 +33,8 @@ HEADERS = {"X-API-KEY": API_KEY}
 
 # CLI Arguments take precedence
 parser = argparse.ArgumentParser(description="Surveillance AI Node")
-parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8000"), help="URL of the central hub")
-parser.add_argument("--weights", type=str, default="yolov5s", help="Model weights (e.g. yolov5s or best.pt)")
+parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8001"), help="URL of the central hub")
+parser.add_argument("--weights", type=str, default=os.getenv("CUSTOM_WEIGHTS", "yolov5s"), help="Path to custom model (e.g. best.pt)")
 parser.add_argument("--classes", nargs='+', default=None, help="Filter classes (e.g. --classes person car)")
 args, unknown = parser.parse_known_args() 
 
@@ -150,6 +150,10 @@ def camera_worker(model, camera, sentinel):
     source = f"{HUB_URL}/video_feed/{cam_id}" if cam_url == "0" else cam_url
     reader = LatestFrameReader(source)
     
+    # Visualization window name
+    window_name = f"REAL-TIME YOLO: {cam_name}"
+    
+    frame_count = 0
     try:
         while sentinel.get(cam_id, False):
             frame = reader.get_frame()
@@ -157,18 +161,25 @@ def camera_worker(model, camera, sentinel):
                 time.sleep(0.05)
                 continue
 
-            # YOLO Overdrive Mode: Use 320px for 4x speedup on CPU
+            frame_count += 1
+            # High Resolution Mode: Use 640px for better accuracy with multiple people
             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = model(img, size=320) 
+            results = model(img, size=640) 
             dets = results.pandas().xyxy[0]
             h, w, _ = frame.shape
 
             if not dets.empty:
                 payloads = []
                 for _, d in dets.iterrows():
-                    # Apply Class Filtering (Vishal's Task)
-                    if FILTER_CLASSES and d['name'].lower() not in [c.lower() for c in FILTER_CLASSES]:
+                    cls_name = d['name'].lower()
+                    if FILTER_CLASSES and cls_name not in [c.lower() for c in FILTER_CLASSES]:
                         continue
+
+                    logger.info(f"[{cam_name}] DETECTED: {cls_name} ({d['confidence']:.2f})")
+                    if cls_name == 'person':
+                        print("\n" + "!" * 50)
+                        print(f"!!! ALERT: PERSON DETECTED ON {cam_name} !!!")
+                        print("!" * 50 + "\n")
 
                     payloads.append({
                         "camera_id": cam_id,
@@ -177,7 +188,8 @@ def camera_worker(model, camera, sentinel):
                         "xcenter": float((d['xmin'] + d['xmax']) / 2 / w),
                         "ycenter": float((d['ymin'] + d['ymax']) / 2 / h),
                         "width": float((d['xmax'] - d['xmin']) / w),
-                        "height": float((d['ymax'] - d['ymin']) / h)
+                        "height": float((d['ymax'] - d['ymin']) / h),
+                        "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
                     })
                 
                 if payloads:
@@ -185,6 +197,12 @@ def camera_worker(model, camera, sentinel):
                         try: detection_queue.get_nowait()
                         except: pass
                     detection_queue.put(payloads)
+            
+            # --- HEADLESS MODE: NO LOCAL WINDOW TO PREVENT CRASHES ---
+            # To see boxes, use the Web Dashboard at http://localhost:8001/monitor/index.html
+            
+            if frame_count % 100 == 0:
+                logger.info(f"AI Worker [{cam_name}] Heartbeat: Processed {frame_count} frames.")
             
     except Exception as e:
         logger.error(f"AI Worker [{cam_name}] Error: {e}")
@@ -207,14 +225,15 @@ def run():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     try:
-        # Load custom model if weights path provided, else load pretrained yolov5s
-        if WEIGHTS.endswith(".pt"):
-            logger.info(f"Loading Custom Model: {WEIGHTS}...")
+        # Load custom model if weights path provided and exists, else load pretrained yolov5s
+        if WEIGHTS and os.path.exists(WEIGHTS):
+            logger.info(f"Loading CUSTOM Neural Core from {WEIGHTS}...")
             model = torch.hub.load('ultralytics/yolov5', 'custom', path=WEIGHTS).to(device)
         else:
-            logger.info(f"Loading Pretrained Model: {WEIGHTS}...")
-            model = torch.hub.load('ultralytics/yolov5', WEIGHTS, pretrained=True).to(device)
-        model.conf = 0.25
+            logger.info(f"Loading Pre-trained {WEIGHTS if WEIGHTS else 'yolov5s'} Core...")
+            model = torch.hub.load('ultralytics/yolov5', WEIGHTS if WEIGHTS else 'yolov5s', pretrained=True).to(device)
+            
+        model.conf = 0.30  # Balanced for multiple people/objects
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         return
@@ -238,7 +257,8 @@ def run():
                 logger.info("Reconnected to Hub.")
                 continue
 
-            active_cams = {c['id']: c for c in cameras if c.get('status') == 'active'}
+            # AI Node should attempt to monitor ALL cameras found in the hub
+            active_cams = {c['id']: c for c in cameras}
             
             for cam_id, cam_data in active_cams.items():
                 if cam_id not in camera_threads or not camera_threads[cam_id].is_alive():

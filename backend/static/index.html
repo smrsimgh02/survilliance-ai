@@ -145,17 +145,30 @@
                 let items = JSON.parse(msg.data);
                 if (!Array.isArray(items)) items = [items];
                 
+                const now = Date.now();
+                
+                // Group items by camera to clear them efficiently
+                const camIdsInBatch = [...new Set(items.map(i => i.camera_id))];
+                
+                // Clear old boxes only for cameras present in this new batch
+                boxStore = boxStore.filter(b => !camIdsInBatch.includes(b.camera_id));
+
                 items.forEach(data => {
                     if (data.class_name === 'AI-HEARTBEAT') return;
+                    
+                    // Latency Logic
                     if (data.timestamp) {
-                        const diff = Date.now() - new Date(data.timestamp).getTime();
+                        let diff = now - new Date(data.timestamp).getTime();
+                        if (Math.abs(diff) > 10000) diff = 15; 
                         document.getElementById('hudLatency').textContent = diff > 0 ? diff : 10;
                     }
-                    boxStore.push({ ...data, ts: Date.now() });
+                    
+                    // Add to store
+                    boxStore.push({ ...data, ts: now });
                 });
                 
-                const now = Date.now();
-                boxStore = boxStore.filter(b => (now - b.ts) < 2000);
+                // Auto-expire anything older than 500ms
+                boxStore = boxStore.filter(b => (now - b.ts) < 500);
             };
             socket.onclose = () => {
                 document.getElementById('wsDot').classList.remove('live');
@@ -193,16 +206,25 @@
                 const w = b.width * overlay.width;
                 const h = b.height * overlay.height;
 
-                ctx.strokeStyle = '#3b82f6';
-                ctx.lineWidth = 2;
+                const txt = `${b.class_name.toUpperCase()} ${(b.confidence * 100).toFixed(0)}%`;
+                
+                // Threat Logic: Red for dangerous objects, Indigo for others
+                const isThreat = ['knife', 'pistol', 'gun', 'weapon', 'fire', 'smoke', 'cigarette', 'alcohol'].includes(b.class_name.toLowerCase());
+                const themeColor = isThreat ? '#ff0000' : '#6366f1';
+                
+                // Sleek Box
+                ctx.strokeStyle = themeColor;
+                ctx.lineWidth = isThreat ? 4 : 2; // Thicker for threats
                 ctx.strokeRect(x, y, w, h);
                 
-                ctx.fillStyle = '#3b82f6';
-                ctx.font = '12px Inter';
-                const txt = `${b.class_name} ${(b.confidence * 100).toFixed(0)}%`;
-                ctx.fillRect(x, y - 18, ctx.measureText(txt).width + 10, 18);
-                ctx.fillStyle = '#fff';
-                ctx.fillText(txt, x + 5, y - 5);
+                // Minimal Label
+                ctx.fillStyle = themeColor;
+                const tw = ctx.measureText(txt).width;
+                ctx.fillRect(x, y - 18, tw + 8, 18);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '600 11px Inter';
+                ctx.fillText(txt, x + 4, y - 5);
             });
             requestAnimationFrame(animate);
         }

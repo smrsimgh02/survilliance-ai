@@ -2,6 +2,10 @@ import subprocess
 import time
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load root .env
+load_dotenv()
 
 def run_live_system():
     print("=" * 55)
@@ -29,7 +33,8 @@ def run_live_system():
     print("-" * 55)
     ai = subprocess.Popen(
         [sys.executable, "-u", "proper_yolo_node.py"],
-        cwd="ai_node"
+        cwd="ai_node",
+        env=os.environ
     )
     processes.append(ai)
 
