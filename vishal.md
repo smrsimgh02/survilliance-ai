@@ -18,6 +18,14 @@ Vishal, you are responsible for the AI nodes that process the video feeds.
 - [x] **Multi-Stream Stability**:
     - *Status: Completed. Verified stable performance for 3+ concurrent streams.*
 
+## 🧠 Phase 2: Custom ML Training (Active)
+- [ ] **Data Collection**:
+    - Download "Weapon Detection" or "Threat" datasets from Roboflow.
+- [ ] **Model Training (Colab)**:
+    - Train YOLOv5 on custom data and export `best.pt`.
+- [x] **Inference Bridge**:
+    - Updated `proper_yolo_node.py` to support custom weight loading via `--weights best.pt`.
+
 ---
 
 ## ✅ Progress Tracking

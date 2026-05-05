@@ -33,11 +33,13 @@ HEADERS = {"X-API-KEY": API_KEY}
 
 # CLI Arguments take precedence
 parser = argparse.ArgumentParser(description="Surveillance AI Node")
-parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8001"), help="URL of the central hub")
+parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8000"), help="URL of the central hub")
+parser.add_argument("--weights", type=str, default="yolov5s", help="Model weights (e.g. yolov5s or best.pt)")
 parser.add_argument("--classes", nargs='+', default=None, help="Filter classes (e.g. --classes person car)")
 args, unknown = parser.parse_known_args() 
 
 HUB_URL = args.hub_url
+WEIGHTS = args.weights
 FILTER_CLASSES = args.classes
 DETECTIONS_URL = f"{HUB_URL}/detections/"
 CAMERAS_URL = f"{HUB_URL}/cameras/"
@@ -205,7 +207,13 @@ def run():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     try:
-        model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).to(device)
+        # Load custom model if weights path provided, else load pretrained yolov5s
+        if WEIGHTS.endswith(".pt"):
+            logger.info(f"Loading Custom Model: {WEIGHTS}...")
+            model = torch.hub.load('ultralytics/yolov5', 'custom', path=WEIGHTS).to(device)
+        else:
+            logger.info(f"Loading Pretrained Model: {WEIGHTS}...")
+            model = torch.hub.load('ultralytics/yolov5', WEIGHTS, pretrained=True).to(device)
         model.conf = 0.25
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
