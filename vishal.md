@@ -12,12 +12,11 @@ Vishal, you are responsible for the AI nodes that process the video feeds.
 - [x] **Auth & Security**:
     - *Status: Completed. Node now sends X-API-KEY with every detection.*
 
-- [ ] **Class Filtering Logic (Next)**:
-    - **Task**: Use the `--classes` CLI flag to drop unwanted detections before they are sent to the hub.
-    - **Goal**: Save bandwidth by only sending critical detections (e.g., 'person').
+- [x] **Class Filtering Logic**:
+    - *Status: Completed. Use --classes flag to filter detections.*
 
-- [ ] **Multi-Stream Stability**:
-    - Test running 3+ cameras on a single node and monitor FPS.
+- [x] **Multi-Stream Stability**:
+    - *Status: Completed. Verified stable performance for 3+ concurrent streams.*
 
 ---
 
