@@ -8,11 +8,21 @@ Welcome Hemant! Your focus is to build a modern, real-time interface for the Sur
 
 - [ ] **Initialize Dashboard Project**: 
     - Setup a Vite + React + TypeScript project in the `/dashboard` directory.
-    - Install dependencies like `axios`, `socket.io-client`, and `leaflet`.
+    - **Urgent**: Must implement `X-API-KEY` in all fetch/websocket calls.
+    - Current `index.html` is failing due to lack of Auth headers.
 
 - [ ] **Live Bounding Box Viewer**:
     - Connect to the Backend WebSocket (`ws://172.16.54.102:8000/ws/detections`).
-    - Render real-time detection boxes over a video stream or camera placeholder.
+    - Fix alignment issues found in the current prototype (Canvas vs Video aspect ratio).
+
+---
+
+## 🚩 Frontend GAP Analysis (For Hemant)
+The current `index.html` prototype has the following issues that you must fix in the React version:
+1. **No API Key Support**: The backend now requires an API key, but the UI isn't sending it.
+2. **Hardcoded URLs**: Don't hardcode camera URLs; fetch them dynamically from the API.
+3. **No Error Handling**: The prototype crashes silently if the network fails. Use Error Boundaries and Try/Catch.
+4. **Performance**: Use a `ResizeObserver` for the canvas instead of `setInterval`.
 
 - [ ] **Detection History Search**:
     - Create a UI to fetch and filter past detections from the Hub's API.
