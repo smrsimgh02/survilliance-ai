@@ -16,12 +16,12 @@ def run_live_system():
     hub = subprocess.Popen(
         [sys.executable, "-u", "main.py"],
         cwd="backend",
-        env={**os.environ, "PORT": "8000"}
+        env={**os.environ, "PORT": "8001"}
     )
     processes.append(hub)
     time.sleep(4)
-    print("[1/2] [OK] Backend Hub running at http://localhost:8000")
-    print("[1/2] Dashboard: http://localhost:8000/monitor/index.html")
+    print("[1/2] [OK] Backend Hub running at http://localhost:8001")
+    print("[1/2] Dashboard: http://localhost:8001/monitor/index.html")
 
     # Step 2: Start AI Node (will ask for mobile IP)
     print()

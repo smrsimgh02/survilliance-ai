@@ -16,18 +16,19 @@ Welcome Hemant! Your focus is the high-performance Sentinel AI Dashboard.
     - Optimized rendering using HTML5 Canvas.
     - *Status: Completed.*
 
-- [ ] **Search Bar Integration (Waiting)**:
+- [x] **Search Bar Integration**:
     - **Task**: Connect the search bar to Samar's new `/detections/search` API.
-    - **Dependency**: Waiting for Samar to finish the backend logic.
+    - *Status: Completed. Integrated with backend search API.*
 
-- [ ] **Camera Map View**:
+- [x] **Camera Map View**:
     - **Task**: Use Leaflet to show camera locations on a map.
-    - **Integration**: Fetch coordinates from the backend node metadata.
+    - *Status: Completed. Added MapView with Dark Mode tiles and markers.*
 
-- [ ] **Node Status Indicators**:
+- [x] **Node Status Indicators**:
     - Show real-time online/offline status for every AI node in the sidebar.
+    - *Status: Completed.*
 
 ---
 
 ## ✅ Progress Tracking
-- 2026-05-06: Initialized React dashboard, implemented security headers, and fixed real-time YOLO visualization. Synced with Vishal's new RTSP updates.
+- 2026-05-06: Completed all dashboard features including Leaflet Map integration, Historical Search API connection, and enhanced UI for Node monitoring. Dashboard is now production-ready.

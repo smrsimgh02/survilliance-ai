@@ -7,7 +7,7 @@ import os
 # --- Configurations ---
 # Updated with your specific Mobile IP
 MOBILE_CAM_URL = "http://10.213.206.219:8080/video" 
-FOG_HUB_URL = "http://localhost:8000/detections/"
+FOG_HUB_URL = "http://localhost:8001/detections/"
 
 def start_mobile_ai_surveillance():
     print(f"[BRIDGE] Connecting to Mobile Camera: {MOBILE_CAM_URL}")

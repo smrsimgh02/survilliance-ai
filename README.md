@@ -17,7 +17,7 @@ cd backend
 pip install -r requirements.txt
 python main.py
 ```
-The server will be available at `http://localhost:8000`. You can view the API documentation at `http://localhost:8000/docs`.
+The server will be available at `http://localhost:8001`. You can view the API documentation at `http://localhost:8001/docs`.
 
 ### 2. Configure AI Nodes
 The AI nodes in `ai_node/` should be configured to send detection payloads to the backend's `/detections/` endpoint.

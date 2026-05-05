@@ -15,9 +15,8 @@ Samar, you are responsible for the heart of the system—the Central Hub.
     - *Status: Completed.*
 
 - [x] **Historical Detections API (CRITICAL)**:
-    - **Task**: Created `/detections/search` endpoint.
-    - **Filters**: Supports `camera_id`, `class_name`, and `date_range`.
-    - **Status**: Ready for Hemant's Dashboard.
+    - **Task**: Created `/detections/search` endpoint with `camera_id`, `class_name`, and `date_range` filters.
+    - **Status**: Completed and ready for integration.
 
 - [x] **Database Optimization**:
     - Enabled WAL Mode for concurrent writes.

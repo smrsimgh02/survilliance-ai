@@ -33,7 +33,7 @@ HEADERS = {"X-API-KEY": API_KEY}
 
 # CLI Arguments take precedence
 parser = argparse.ArgumentParser(description="Surveillance AI Node")
-parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8000"), help="URL of the central hub")
+parser.add_argument("--hub-url", type=str, default=os.getenv("HUB_URL", "http://localhost:8001"), help="URL of the central hub")
 parser.add_argument("--classes", nargs='+', default=None, help="Filter classes (e.g. --classes person car)")
 args, unknown = parser.parse_known_args() 
 
@@ -64,6 +64,24 @@ def sender_worker():
 
 # Start the background sender
 threading.Thread(target=sender_worker, daemon=True).start()
+
+def heartbeat_worker():
+    """Periodic heartbeat to keep camera status 'Online' on the dashboard."""
+    while True:
+        try:
+            # Send heartbeat for all active cameras this node might be handling
+            # In a real setup, this would be camera-specific.
+            # Here we just fetch cameras and ping the ones we see.
+            r = requests.get(f"{HUB_URL}/cameras/", headers=HEADERS, timeout=1)
+            if r.status_code == 200:
+                for cam in r.json():
+                    if cam.get('status') == 'active':
+                        requests.post(f"{HUB_URL}/cameras/heartbeat/{cam['id']}", headers=HEADERS, timeout=1)
+        except:
+            pass
+        time.sleep(10)
+
+threading.Thread(target=heartbeat_worker, daemon=True).start()
 
 def test_hub():
     """Check if the hub is reachable and authorized."""

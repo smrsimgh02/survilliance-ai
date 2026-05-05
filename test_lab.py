@@ -2,9 +2,13 @@ import threading
 import requests
 import time
 import random
-import sys
+import os
+from dotenv import load_dotenv
 
-BACKEND_URL = "http://localhost:8000/detections/"
+load_dotenv()
+API_KEY = os.getenv("API_KEY", "surveillance_secret_key_2024")
+BACKEND_URL = f"http://localhost:8001/detections/"
+HEADERS = {"X-API-KEY": API_KEY}
 
 def camera_worker(camera_id):
     objects = ["Person", "Vehicle", "Backpack", "Gun (Mock)", "Dog"]
@@ -21,7 +25,7 @@ def camera_worker(camera_id):
             "height": 0.4
         }
         try:
-            resp = requests.post(BACKEND_URL, json=payload, timeout=2)
+            resp = requests.post(BACKEND_URL, json=payload, headers=HEADERS, timeout=2)
             if resp.status_code == 201:
                 print(f"[OK] {camera_id}: Detected {obj} ({conf*100}%)")
             else:
@@ -43,7 +47,7 @@ def run_simulation():
         t.join()
     print("\nSimulation Complete. Verifying Database Status...")
     try:
-        count_resp = requests.get(BACKEND_URL)
+        count_resp = requests.get(BACKEND_URL, headers=HEADERS)
         detections = count_resp.json()
         print(f"Total detections in database: {len(detections)}")
         print(f"Latest 3 entries: {[d['class_name'] for d in detections[:3]]}")

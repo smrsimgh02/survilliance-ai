@@ -6,7 +6,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
       - ./backend/database.db:/app/database.db
     env_file:
@@ -20,7 +20,7 @@ services:
     depends_on:
       - hub
     environment:
-      - HUB_URL=http://hub:8000
+      - HUB_URL=http://hub:8001
     env_file:
       - .env
     # Note: For GPU support, additional config would be needed here

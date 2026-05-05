@@ -7,7 +7,9 @@ import random
 import threading
 
 # --- Configurations ---
-FOG_HUB_URL = "http://localhost:8000/detections/"
+FOG_HUB_URL = "http://localhost:8001/detections/"
+API_KEY = os.getenv("API_KEY", "surveillance_secret_key_2024")
+HEADERS = {"X-API-KEY": API_KEY}
 DB_PATH = "edge_buffer.db"
 
 def init_db():
@@ -47,7 +49,7 @@ def drain_buffer():
             rows = c.fetchall()
             for row in rows:
                 try:
-                    resp = requests.post(FOG_HUB_URL, json=json.loads(row[1]), timeout=5)
+                    resp = requests.post(FOG_HUB_URL, json=json.loads(row[1]), headers=HEADERS, timeout=5)
                     if resp.status_code in [200, 201]:
                         c.execute("DELETE FROM buffer WHERE id = ?", (row[0],))
                         conn.commit()
@@ -72,7 +74,7 @@ def simulate_detection():
         }
         try:
             print(f"[LIVE] Detected {obj} ({conf*100}%)")
-            resp = requests.post(FOG_HUB_URL, json=payload, timeout=2)
+            resp = requests.post(FOG_HUB_URL, json=payload, headers=HEADERS, timeout=2)
             if resp.status_code not in [200, 201]:
                 save_to_buffer(payload)
         except Exception:
