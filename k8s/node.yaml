@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: camera-node-sim
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: camera-node
+  template:
+    metadata:
+      labels:
+        app: camera-node
+    spec:
+      containers:
+      - name: camera-node
+        image: python:3.10-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install requests;
+            while true; do
+              case $(($RANDOM % 3)) in
+                0) OBJ="Person";;
+                1) OBJ="Car";;
+                2) OBJ="Bag";;
+              esac;
+              TEMP_DATA="{\"camera_id\":\"NODE-$(hostname)\", \"class_name\":\"$OBJ\", \"confidence\":0.$(($RANDOM % 100 + 70)), \"xcenter\":0.5, \"ycenter\":0.5, \"width\":0.2, \"height\":0.4}";
+              echo "Pushing detection: $TEMP_DATA";
+              curl -s -X POST "http://surveillance-backend/detections/" -H "Content-Type: application/json" -d "$TEMP_DATA";
+              sleep 5;
+            done
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
