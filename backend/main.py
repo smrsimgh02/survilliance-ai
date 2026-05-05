@@ -125,8 +125,8 @@ async def root():
 async def health():
     return {"status": "healthy", "uptime": "online", "timestamp": str(datetime.datetime.utcnow())}
 
-@app.post("/detections/", status_code=201)
-async def create_detection(detection: Detection, api_key: str = Depends(verify_api_key)):
+@app.post("/detections/", status_code=201, dependencies=[Depends(verify_api_key)])
+async def create_detection(detection: Detection):
     try:
         with Session(engine) as session:
             session.add(detection)
@@ -145,8 +145,8 @@ async def create_detection(detection: Detection, api_key: str = Depends(verify_a
         logger.error(f"Error saving detection: {e}")
         return {"error": str(e)}
 
-@app.post("/detections/bulk/", status_code=201)
-async def create_bulk_detections(detections: List[Detection], api_key: str = Depends(verify_api_key)):
+@app.post("/detections/bulk/", status_code=201, dependencies=[Depends(verify_api_key)])
+async def create_bulk_detections(detections: List[Detection]):
     broadcast_payload = []
     for d in detections:
         data = d.dict()
@@ -183,7 +183,7 @@ async def get_cameras():
     with Session(engine) as session:
         return session.exec(select(Camera)).all()
 
-@app.post("/cameras/", status_code=201)
+@app.post("/cameras/", status_code=201, dependencies=[Depends(verify_api_key)])
 async def add_camera(camera: Camera):
     with Session(engine) as session:
         session.add(camera)
@@ -192,7 +192,7 @@ async def add_camera(camera: Camera):
         logger.info(f"New camera registered: {camera.id}")
         return camera
 
-@app.delete("/cameras/{camera_id}")
+@app.delete("/cameras/{camera_id}", dependencies=[Depends(verify_api_key)])
 async def delete_camera(camera_id: str):
     with Session(engine) as session:
         camera = session.get(Camera, camera_id)
