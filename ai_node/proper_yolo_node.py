@@ -7,10 +7,20 @@ import warnings
 import threading
 import queue
 import datetime
+import argparse
+import logging
+
+# Setup Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger("AI-Node")
 
 warnings.filterwarnings("ignore")
 
-# --- Configuration ---
+# --- Configuration Defaults (Updated via CLI) ---
 HUB_URL = "http://localhost:8000"
 DETECTIONS_URL = f"{HUB_URL}/detections/"
 CAMERAS_URL = f"{HUB_URL}/cameras/"
@@ -22,9 +32,10 @@ def sender_worker():
     while True:
         try:
             payload = detection_queue.get()
+            # Always use the current global HUB_URL
             requests.post(f"{HUB_URL}/detections/bulk/", json=payload, timeout=0.5)
             detection_queue.task_done()
-        except:
+        except Exception:
             pass
 
 # Start the background sender
@@ -34,14 +45,14 @@ def test_hub():
     try:
         r = requests.get(HUB_URL, timeout=3)
         return r.status_code == 200
-    except:
+    except Exception:
         return False
 
 def get_cameras():
     try:
-        r = requests.get(CAMERAS_URL, timeout=3)
+        r = requests.get(f"{HUB_URL}/cameras/", timeout=3)
         return r.json() if r.status_code == 200 else []
-    except:
+    except Exception:
         return []
 
 class LatestFrameReader:
@@ -78,7 +89,7 @@ def camera_worker(model, camera):
     cam_url = camera['url']
     cam_name = camera.get('name', cam_id)
     
-    print(f"[AI:{cam_name}] Launching High-Speed Pipeline...")
+    logger.info(f"[AI:{cam_name}] Launching High-Speed Pipeline...")
     
     source = f"{HUB_URL}/video_feed/{cam_id}" if cam_url == "0" else cam_url
     reader = LatestFrameReader(source)
@@ -118,37 +129,60 @@ def camera_worker(model, camera):
             # time.sleep(0.04) 
             
     except Exception as e:
-        print(f"[AI:{cam_name}] Error: {e}")
+        logger.error(f"[AI:{cam_name}] Error: {e}")
     finally:
         reader.release()
-        print(f"[AI:{cam_name}] Offline.")
+        logger.info(f"[AI:{cam_name}] Offline.")
 
 camera_threads = {}
 thread_sentinel = {}
 
 def run():
+    global HUB_URL, DETECTIONS_URL, CAMERAS_URL
+    
+    parser = argparse.ArgumentParser(description="Surveillance AI Node")
+    parser.add_argument("--hub-url", type=str, default="http://localhost:8000", help="URL of the central hub")
+    args = parser.parse_args()
+    
+    HUB_URL = args.hub_url
+    DETECTIONS_URL = f"{HUB_URL}/detections/"
+    CAMERAS_URL = f"{HUB_URL}/cameras/"
+
     print("=" * 60)
-    print("   SURVEILLANCE AI - ZERO LATENCY REAL-TIME ENGINE")
+    print("   SURVEILLANCE AI - INDESTRUCTIBLE REAL-TIME ENGINE")
     print("=" * 60)
     
-    if not test_hub():
-        print("[ERROR] Hub Offline. Start server first.")
-        return
+    # INDESTRUCTIBLE MODE: Wait for Hub
+    while not test_hub():
+        logger.warning(f"Hub at {HUB_URL} is OFFLINE. Retrying in 5s...")
+        time.sleep(5)
 
-    print("[AI] Loading Neural Core...")
+    logger.info("Hub Connection Verified. Loading Neural Core...")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).to(device)
-    model.conf = 0.25
+    
+    try:
+        model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).to(device)
+        model.conf = 0.25
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        return
     
     # Maximize CPU usage for low-latency
     if device == 'cpu':
         torch.set_num_threads(4) 
     
-    print(f"[AI] Core Engine: ONLINE using {device} (320px Optimized)\n")
+    logger.info(f"Core Engine: ONLINE using {device} (320px Optimized)\n")
 
     while True:
         try:
             cameras = get_cameras()
+            if not cameras and not test_hub():
+                logger.warning("Lost connection to Hub. Attempting to reconnect...")
+                while not test_hub():
+                    time.sleep(5)
+                logger.info("Reconnected to Hub.")
+                continue
+
             active_cams = {c['id']: c for c in cameras if c.get('status') == 'active'}
             
             for cam_id, cam_data in active_cams.items():
@@ -157,15 +191,16 @@ def run():
                     t = threading.Thread(target=camera_worker, args=(model, cam_data), daemon=True)
                     t.start()
                     camera_threads[cam_id] = t
-                    print(f"[SYSTEM] Dynamic Link: {cam_id}")
+                    logger.info(f"[SYSTEM] Dynamic Link established: {cam_id}")
 
             for cam_id in list(camera_threads.keys()):
                 if cam_id not in active_cams:
                     thread_sentinel[cam_id] = False
                     camera_threads.pop(cam_id)
+                    logger.info(f"[SYSTEM] Dynamic Link severed: {cam_id}")
 
         except Exception as e:
-            print(f"[SYSTEM] Orchestrator error: {e}")
+            logger.error(f"[SYSTEM] Orchestrator error: {e}")
 
         time.sleep(5)
 
