@@ -7,12 +7,12 @@
 - [ ] Optimize the WebSocket server for multi-camera support.
 - [x] Implement API Key Security (`X-API-KEY`).
 
-## 🔵 Person 2 (Hemant): AI Intelligence (Folder: `/ai_node`)
+## 🔵 Person 2 (Vishal): AI Intelligence (Folder: `/ai_node`)
 - [x] Optimized with Auto-Reconnect logic for better FPS.
 - [ ] Add support for Mobile IP Cameras (RTSP streams).
 - [ ] Filter out "False Positives" (e.g., only detect 'person' or 'car').
 
-## 🟡 Person 3 (Vishal): Dashboard & UI (Folder: `/dashboard`)
+## 🟡 Person 3 (Hemant): Dashboard & UI (Folder: `/dashboard`)
 - [x] Build a Modern Web Dashboard to see live bounding boxes.
 - [ ] Create a "Search" feature to look for past detections.
 - [ ] Add a map view to show where cameras are located.
