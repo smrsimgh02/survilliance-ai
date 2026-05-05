@@ -9,6 +9,11 @@ import queue
 import datetime
 import argparse
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load Configuration
+load_dotenv()
 
 # Configure Logging
 logging.basicConfig(
@@ -20,12 +25,15 @@ logger = logging.getLogger("AI-Node")
 
 warnings.filterwarnings("ignore")
 
-# --- Argument Parsing ---
+# --- Configuration ---
 parser = argparse.ArgumentParser(description="Surveillance AI Node")
-parser.add_argument("--hub-url", default="http://localhost:8000", help="URL of the Central Hub")
+parser.add_argument("--hub-url", default=os.getenv("HUB_URL", "http://localhost:8000"), help="URL of the Central Hub")
 args = parser.parse_args()
 
 HUB_URL = args.hub_url
+API_KEY = os.getenv("API_KEY", "surveillance_secret_key_2024")
+HEADERS = {"X-API-KEY": API_KEY}
+
 DETECTIONS_URL = f"{HUB_URL}/detections/"
 CAMERAS_URL = f"{HUB_URL}/cameras/"
 
@@ -36,7 +44,7 @@ def sender_worker():
     while True:
         try:
             payload = detection_queue.get()
-            response = requests.post(f"{HUB_URL}/detections/bulk/", json=payload, timeout=1.0)
+            response = requests.post(f"{HUB_URL}/detections/bulk/", json=payload, headers=HEADERS, timeout=1.0)
             if response.status_code == 201:
                 detection_queue.task_done()
             else:
@@ -54,7 +62,7 @@ threading.Thread(target=sender_worker, daemon=True).start()
 def test_hub():
     """Check if the hub is reachable."""
     try:
-        r = requests.get(HUB_URL, timeout=3)
+        r = requests.get(HUB_URL, headers=HEADERS, timeout=3)
         return r.status_code == 200
     except:
         return False
@@ -62,7 +70,7 @@ def test_hub():
 def get_cameras():
     """Fetch camera configuration from hub."""
     try:
-        r = requests.get(CAMERAS_URL, timeout=3)
+        r = requests.get(CAMERAS_URL, headers=HEADERS, timeout=3)
         return r.json() if r.status_code == 200 else []
     except:
         return []

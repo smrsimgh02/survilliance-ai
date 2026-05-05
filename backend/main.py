@@ -6,16 +6,39 @@ from pydantic import BaseModel
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 import json
 import asyncio
+import logging
+from dotenv import load_dotenv
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import Security, HTTPException, Depends
+from fastapi.security.api_key import APIKeyHeader
 import os
 import cv2
 import time
 from threading import Lock
 import numpy as np
 
+# --- Setup Configuration ---
+load_dotenv()
+API_KEY = os.getenv("API_KEY", "surveillance_secret_key_2024")
+api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=True)
 
+# --- Setup Logging ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("Surveillance-Hub")
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key == API_KEY:
+        return api_key
+    raise HTTPException(
+        status_code=403,
+        detail="Unauthorized node: Invalid API Key."
+    )
 
 class Detection(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -35,19 +58,17 @@ class Camera(SQLModel, table=True):
     location: Optional[str] = None
     status: str = "active"
 
-
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///database.db")
 engine = create_engine(DATABASE_URL, echo=False)
 
 def create_db_and_tables():
+    logger.info("Initializing database...")
     SQLModel.metadata.create_all(engine)
-
-
 
 app = FastAPI(
     title="Surveillance AI Hub",
     description="Central backend for managing AI surveillance nodes and data.",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 app.add_middleware(
@@ -58,8 +79,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -67,88 +86,67 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        logger.info(f"New client connected. Total clients: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"Client disconnected. Total clients: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                print(f"Error broadcasting to WS: {e}")
+                logger.debug(f"Broadcast failed for a client: {e}")
 
 manager = ConnectionManager()
 
-# Store latest detections for server-side drawing in video stream
-latest_detections = {} # {camera_id: [{class, conf, x, y, w, h}, ...]}
+# Store latest detections for server-side drawing
+latest_detections = {} 
 latest_detections_lock = Lock()
-
-def get_yolo_color(class_id):
-    """Vibrant BGR colors (OpenCV default) for standard YOLO look."""
-    colors = [
-        (0, 0, 255),   # Red
-        (0, 255, 0),   # Green
-        (255, 0, 0),   # Blue
-        (0, 255, 255), # Yellow
-        (255, 0, 255), # Magenta
-        (255, 255, 0), # Cyan
-        (0, 165, 255), # Orange
-        (203, 192, 255), # Pink
-        (128, 0, 128), # Purple
-        (42, 42, 165), # Brown
-    ]
-    # Simple hash to keep color consistent for the same class
-    return colors[abs(hash(class_id)) % len(colors)]
-
-
-
 
 @app.on_event("startup")
 def on_startup():
-    print("[BACKEND] Booting up systems...")
+    logger.info("🚀 Surveillance Hub Booting Up...")
+    create_db_and_tables()
 
-# Get path relative to the script location
+# Static files for the dashboard
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/monitor", StaticFiles(directory=static_dir), name="static")
-
-
+    logger.info(f"Dashboard mounted at /monitor")
 
 @app.get("/")
 async def root():
-    return {"message": "Surveillance AI Hub API is running", "status": "ok"}
+    return {"message": "Surveillance AI Hub API is running", "status": "ok", "timestamp": datetime.datetime.utcnow()}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "timestamp": str(datetime.datetime.utcnow())}
+    return {"status": "healthy", "uptime": "online", "timestamp": str(datetime.datetime.utcnow())}
 
 @app.post("/detections/", status_code=201)
-async def create_detection(detection: Detection):
-    with Session(engine) as session:
-        session.add(detection)
-        session.commit()
-        session.refresh(detection)
+async def create_detection(detection: Detection, api_key: str = Depends(verify_api_key)):
+    try:
+        with Session(engine) as session:
+            session.add(detection)
+            session.commit()
+            session.refresh(detection)
+            
+            with latest_detections_lock:
+                latest_detections[detection.camera_id] = [detection.dict()]
         
-        # Update latest detections for server-side drawing while session is active
-        with latest_detections_lock:
-            # Store a copy of the dict to avoid detached instance issues
-            latest_detections[detection.camera_id] = [detection.dict()]
-    
-    # Broadcast directly
-    broadcast_data = detection.dict()
-    # Convert datetime to string for JSON serialization
-    if "timestamp" in broadcast_data and broadcast_data["timestamp"]:
-        broadcast_data["timestamp"] = str(broadcast_data["timestamp"])
-    await manager.broadcast(broadcast_data)
-    
-    return detection
+        broadcast_data = detection.dict()
+        if "timestamp" in broadcast_data and broadcast_data["timestamp"]:
+            broadcast_data["timestamp"] = str(broadcast_data["timestamp"])
+        await manager.broadcast(broadcast_data)
+        return detection
+    except Exception as e:
+        logger.error(f"Error saving detection: {e}")
+        return {"error": str(e)}
 
 @app.post("/detections/bulk/", status_code=201)
-async def create_bulk_detections(detections: List[Detection]):
-    # Broadcast FIRST for maximum real-time speed
+async def create_bulk_detections(detections: List[Detection], api_key: str = Depends(verify_api_key)):
     broadcast_payload = []
     for d in detections:
         data = d.dict()
@@ -157,19 +155,17 @@ async def create_bulk_detections(detections: List[Detection]):
     
     await manager.broadcast(broadcast_payload)
     
-    # Then Save to DB
     try:
         with Session(engine) as session:
             for d in detections:
                 session.add(d)
             session.commit()
             
-            # Cache for server-side drawing
             if detections:
                 with latest_detections_lock:
                     latest_detections[detections[0].camera_id] = [d.dict() for d in detections]
     except Exception as e:
-        print(f"[ERROR] DB Save failed but broadcast sent: {e}")
+        logger.error(f"DB Bulk Save failed: {e}")
         
     return {"status": "success", "count": len(detections)}
 
@@ -193,6 +189,7 @@ async def add_camera(camera: Camera):
         session.add(camera)
         session.commit()
         session.refresh(camera)
+        logger.info(f"New camera registered: {camera.id}")
         return camera
 
 @app.delete("/cameras/{camera_id}")
@@ -203,26 +200,24 @@ async def delete_camera(camera_id: str):
             return {"error": "Camera not found"}
         session.delete(camera)
         session.commit()
+        logger.info(f"Camera deleted: {camera_id}")
         return {"status": "deleted"}
-
-
 
 import threading
 local_webcam = None
 latest_frame = None
-latest_jpeg = None # Shared pre-encoded JPEG bytes
+latest_jpeg = None 
 webcam_lock = Lock()
 
 def camera_thread_func():
     global local_webcam, latest_frame, latest_jpeg
-    print("[BACKEND] High-Performance Broadcast Thread started.")
+    logger.info("High-Performance Broadcast Thread started.")
     local_webcam = cv2.VideoCapture(0)
     
     while True:
         try:
             success, frame = local_webcam.read()
             if success:
-                # 1. Encode ONCE
                 ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ret:
                     jpeg_bytes = buffer.tobytes()
@@ -230,21 +225,19 @@ def camera_thread_func():
                         latest_frame = frame
                         latest_jpeg = jpeg_bytes
             else:
-                print("[BACKEND] Camera Busy/Lost. Recovering...")
+                logger.warning("Camera Busy/Lost. Attempting recovery...")
                 local_webcam.release()
                 time.sleep(2)
                 local_webcam = cv2.VideoCapture(0)
         except Exception as e:
-            print(f"[BACKEND] Camera Thread Error: {e}")
+            logger.error(f"Camera Thread Error: {e}")
         time.sleep(0.01)
 
 @app.on_event("startup")
 def startup_event():
-    create_db_and_tables()
-    # Run the camera capture in background
     t = threading.Thread(target=camera_thread_func, daemon=True)
     t.start()
-    print("[BACKEND] Camera thread active.")
+    logger.info("Background camera capture active.")
 
 def gen_frames(camera_id: str):
     while True:
@@ -253,7 +246,6 @@ def gen_frames(camera_id: str):
             frame_bytes = latest_jpeg
         
         if frame_bytes is None:
-            # Fallback frame if no signal
             temp_frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(temp_frame, "CONNECTING...", (220, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             ret, buffer = cv2.imencode('.jpg', temp_frame)
@@ -262,7 +254,7 @@ def gen_frames(camera_id: str):
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         
-        time.sleep(0.03) # Clean 30fps broadcast
+        time.sleep(0.03)
 
 @app.get("/video_feed/{camera_id}")
 async def video_feed(camera_id: str):
@@ -277,12 +269,15 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
     import uvicorn
-    # Use Dynamic Port for Cluster Simulation
     port = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
