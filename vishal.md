@@ -6,21 +6,20 @@ Vishal, you are responsible for the AI nodes that process the video feeds.
 
 ## 🚀 Current Tasks
 
-- [x] **RTSP / IP Camera Support**: [VERIFIED ✅]
-    - Updated `proper_yolo_node.py` to support RTSP streams with TCP transport and auto-recovery.
-- [x] **Class Filtering**: [VERIFIED ✅]
-    - Added `--classes` CLI argument to filter detections (e.g., `python proper_yolo_node.py --classes person car`).
-- [ ] **FPS Optimization**:
-    - Test the node on different hardware and optimize the inference size (currently 320px).
-- [x] **Maintenance**: [VERIFIED ✅]
-    - "Indestructible" mode (auto-reconnect) is fully integrated with Samar's API Security system.
+- [x] **RTSP / IP Camera Support**:
+    - *Status: Completed. Added LatestFrameReader with RTSP transport support.*
 
----
+- [x] **Auth & Security**:
+    - *Status: Completed. Node now sends X-API-KEY with every detection.*
 
-## 🛠️ Tech Note (Production Gap)
-The `proper_yolo_node.py` now supports `.env` and `API_KEY`. Make sure to keep your local `.env` updated with the Hub's credentials.
+- [ ] **Class Filtering Logic (Next)**:
+    - **Task**: Use the `--classes` CLI flag to drop unwanted detections before they are sent to the hub.
+    - **Goal**: Save bandwidth by only sending critical detections (e.g., 'person').
+
+- [ ] **Multi-Stream Stability**:
+    - Test running 3+ cameras on a single node and monitor FPS.
 
 ---
 
 ## ✅ Progress Tracking
-*Update this file whenever you finish a task!*
+- 2026-05-06: Implemented RTSP support and security headers. Refactored node to use background threading for network requests.
