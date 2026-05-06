@@ -176,10 +176,10 @@ def camera_worker(model, camera, sentinel):
                         continue
 
                     logger.info(f"[{cam_name}] DETECTED: {cls_name} ({d['confidence']:.2f})")
-                    if cls_name == 'person':
-                        print("\n" + "!" * 50)
-                        print(f"!!! ALERT: PERSON DETECTED ON {cam_name} !!!")
-                        print("!" * 50 + "\n")
+                    if cls_name in ['pistol', 'knife']:
+                        print("\n" + "!" * 60)
+                        print(f"!!! CRITICAL ALERT: {cls_name.upper()} DETECTED ON {cam_name} !!!")
+                        print("!" * 60 + "\n")
 
                     payloads.append({
                         "camera_id": cam_id,

@@ -27,16 +27,21 @@ def run_live_system():
     print("[1/2] [OK] Backend Hub running at http://localhost:8001")
     print("[1/2] Dashboard: http://localhost:8001/monitor/index.html")
 
-    # Step 2: Start AI Node (will ask for mobile IP)
-    print()
-    print("[2/2] Starting AI Detection Node...")
-    print("-" * 55)
-    ai = subprocess.Popen(
+    # Step 2: Start AI Nodes (General & Weapons)
+    print("\n[2/2] Launching Dual AI Pipeline...")
+    
+    # Instance 1: Standard YOLO (Person, Car, etc.)
+    processes.append(subprocess.Popen(
         [sys.executable, "-u", "proper_yolo_node.py"],
-        cwd="ai_node",
-        env=os.environ
-    )
-    processes.append(ai)
+        cwd="ai_node", env=os.environ
+    ))
+
+    # Instance 2: Weapon Detection (Pistol, Knife)
+    processes.append(subprocess.Popen(
+        [sys.executable, "-u", "proper_yolo_node.py", "--weights", "best.pt", "--classes", "pistol", "knife"],
+        cwd="ai_node", env=os.environ
+    ))
+    print("-" * 55)
 
     print()
     print("=" * 55)
